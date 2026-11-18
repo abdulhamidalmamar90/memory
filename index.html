@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>ذكرى ❤</title>
+<style>
+  :root{--bg:#120a10;--card:#1e121b;--txt:#f6e9ef;--muted:#b89aa8;--acc:#e0577f}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 20%,#3a1328 0,var(--bg) 70%);color:var(--txt);
+    font-family:system-ui,"Segoe UI",Tahoma,sans-serif;padding:16px}
+  .card{width:100%;max-width:380px;background:var(--card);border-radius:20px;padding:32px 24px;
+    text-align:center;box-shadow:0 20px 60px #0008}
+  .heart{font-size:48px;animation:b 1.4s infinite}
+  @keyframes b{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+  h1{font-size:22px;margin:12px 0 6px}
+  p{color:var(--muted);margin:0 0 20px;font-size:15px}
+  input{width:100%;padding:14px;border-radius:12px;border:1px solid #4a2a3c;background:#140b12;
+    color:var(--txt);font-size:20px;text-align:center;letter-spacing:3px;direction:ltr}
+  input:focus{outline:2px solid var(--acc);border-color:transparent}
+  button{margin-top:14px;width:100%;padding:14px;border:0;border-radius:12px;background:var(--acc);
+    color:#fff;font-size:17px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.6;cursor:wait}
+  .err{color:#ff8fa8;min-height:22px;margin-top:12px;font-size:14px}
+  #player{display:none;width:100%;max-width:480px}
+  video{width:100%;max-height:92vh;border-radius:16px;background:#000;display:block}
+</style>
+</head>
+<body>
+  <div class="card" id="lock">
+    <div class="heart">❤</div>
+    <h1>ذكرى خاصة</h1>
+    <p>اكتب كلمة السر لتشوف الفيديو</p>
+    <form id="f">
+      <input id="pw" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••••" required>
+      <button id="go">افتح</button>
+    </form>
+    <div class="err" id="err"></div>
+  </div>
+  <div id="player"><video id="v" controls playsinline></video></div>
+<script>
+const $=id=>document.getElementById(id);
+let blob=null;
+async function getData(){
+  if(!blob){const r=await fetch('video.bin');if(!r.ok)throw new Error('net');blob=await r.arrayBuffer();}
+  return blob;
+}
+$('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const pw=$('pw').value.trim(); if(!pw)return;
+  $('go').disabled=true; $('err').textContent=''; $('go').textContent='جاري الفتح…';
+  try{
+    const buf=await getData();
+    const salt=buf.slice(0,16),iv=buf.slice(16,28),ct=buf.slice(28);
+    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+    $('v').src=URL.createObjectURL(new Blob([plain],{type:'video/mp4'}));
+    $('lock').style.display='none'; $('player').style.display='block';
+    $('v').play().catch(()=>{});
+  }catch(err){
+    $('err').textContent = err.message==='net' ? 'صار خطأ بالتحميل، جرّب مرة ثانية' : 'كلمة السر غلط';
+    $('pw').value=''; $('pw').focus();
+  }finally{ $('go').disabled=false; $('go').textContent='افتح'; }
+});
+</script>
+</body>
+</html>
