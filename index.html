@@ -55,8 +55,12 @@
 const $=id=>document.getElementById(id);
 const files={1:'video1.bin',2:'video2.bin'};
 const urls={};let pw='',cur=0;
-async function open(n){
-  if(urls[n])return urls[n];
+const jobs={};
+function open(n){
+  if(!jobs[n])jobs[n]=load(n).catch(e=>{delete jobs[n];throw e;});
+  return jobs[n];
+}
+async function load(n){
   const r=await fetch(files[n]);if(!r.ok)throw new Error('net');
   const buf=await r.arrayBuffer();
   const salt=buf.slice(0,16),iv=buf.slice(16,28),ct=buf.slice(28);
@@ -81,6 +85,7 @@ $('f').addEventListener('submit',async e=>{
     await open(1);
     $('lock').style.display='none'; $('player').style.display='block';
     show(1);
+    open(2).catch(()=>{}); // جهّز الفيديو 2 بالخلفية
   }catch(err){
     $('err').textContent = err.message==='net' ? 'صار خطأ بالتحميل، جرّب مرة ثانية' : 'كلمة السر غلط';
     $('pw').value=''; $('pw').focus();
