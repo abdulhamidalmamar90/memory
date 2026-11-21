@@ -25,6 +25,10 @@
   button:disabled{opacity:.6;cursor:wait}
   .err{color:#ff8fa8;min-height:22px;margin-top:12px;font-size:14px}
   #player{display:none;width:100%;max-width:480px}
+  .tabs{display:flex;gap:10px;margin-bottom:12px}
+  .tabs button{margin-top:0;background:#3a1f30;color:var(--txt)}
+  .tabs button.on{background:var(--acc);color:#fff}
+  .msg{text-align:center;color:var(--muted);min-height:20px;margin:8px 0;font-size:14px}
   video{width:100%;max-height:92vh;border-radius:16px;background:#000;display:block}
 </style>
 </head>
@@ -39,27 +43,44 @@
     </form>
     <div class="err" id="err"></div>
   </div>
-  <div id="player"><video id="v" controls playsinline></video></div>
+  <div id="player">
+    <div class="tabs">
+      <button type="button" id="b1">الفيديو 1 ❤</button>
+      <button type="button" id="b2">الفيديو 2 ❤</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <video id="v" controls playsinline></video>
+  </div>
 <script>
 const $=id=>document.getElementById(id);
-let blob=null;
-async function getData(){
-  if(!blob){const r=await fetch('video.bin');if(!r.ok)throw new Error('net');blob=await r.arrayBuffer();}
-  return blob;
+const files={1:'video1.bin',2:'video2.bin'};
+const urls={};let pw='',cur=0;
+async function open(n){
+  if(urls[n])return urls[n];
+  const r=await fetch(files[n]);if(!r.ok)throw new Error('net');
+  const buf=await r.arrayBuffer();
+  const salt=buf.slice(0,16),iv=buf.slice(16,28),ct=buf.slice(28);
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return urls[n]=URL.createObjectURL(new Blob([plain],{type:'video/mp4'}));
 }
+async function show(n){
+  if(n===cur)return;
+  $('b1').classList.toggle('on',n===1);$('b2').classList.toggle('on',n===2);
+  $('v').pause();$('msg').textContent=urls[n]?'':'جاري التحميل… 💕';
+  try{const u=await open(n);if($('b'+n).classList.contains('on')){cur=n;$('v').src=u;$('msg').textContent='';$('v').play().catch(()=>{});}}
+  catch(e){$('msg').textContent='صار خطأ بالتحميل، جرّب مرة ثانية';cur=0;}
+}
+$('b1').onclick=()=>show(1);$('b2').onclick=()=>show(2);
 $('f').addEventListener('submit',async e=>{
   e.preventDefault();
-  const pw=$('pw').value.trim(); if(!pw)return;
+  pw=$('pw').value.trim(); if(!pw)return;
   $('go').disabled=true; $('err').textContent=''; $('go').textContent='جاري الفتح…';
   try{
-    const buf=await getData();
-    const salt=buf.slice(0,16),iv=buf.slice(16,28),ct=buf.slice(28);
-    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
-    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
-    const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
-    $('v').src=URL.createObjectURL(new Blob([plain],{type:'video/mp4'}));
+    await open(1);
     $('lock').style.display='none'; $('player').style.display='block';
-    $('v').play().catch(()=>{});
+    show(1);
   }catch(err){
     $('err').textContent = err.message==='net' ? 'صار خطأ بالتحميل، جرّب مرة ثانية' : 'كلمة السر غلط';
     $('pw').value=''; $('pw').focus();
